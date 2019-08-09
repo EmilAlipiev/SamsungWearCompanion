@@ -17,7 +17,8 @@ using Com.Samsung.Android.Sdk.Accessory;
 [assembly: Xamarin.Forms.Dependency(typeof(WearCompanion.Droid.ProviderService))]
 namespace WearCompanion.Droid
 {
-    public class ProviderService : SAAgent
+    [Service(Exported = true, Name = "WearCompanion.Droid.ProviderService")]
+    public class ProviderService : SAAgent 
     {
         public Action<string> _onComplete;
         public static readonly string TAG = typeof(ProviderService).Name;
@@ -30,10 +31,12 @@ namespace WearCompanion.Droid
         private Task _task;
         private static readonly int CHANNEL_ID = 104;
 
+ 
         public ProviderService() : base("ProviderService", SASOCKET_CLASS)
         {
 
         }
+ 
         public override void OnDestroy()
         {
             base.OnDestroy();
