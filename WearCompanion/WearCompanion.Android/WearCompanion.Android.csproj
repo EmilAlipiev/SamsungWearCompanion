@@ -50,6 +50,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Mono.Android" />
+    <Reference Include="Mono.Android.Export" />
     <Reference Include="myAndroidBindings">
       <HintPath>..\dlls\myAndroidBindings.dll</HintPath>
     </Reference>

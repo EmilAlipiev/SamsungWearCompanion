@@ -13,30 +13,29 @@ using Android.Widget;
 using Com.Samsung.Accessory;
 using Com.Samsung.Android.Sdk;
 using Com.Samsung.Android.Sdk.Accessory;
+using Java.Interop;
 
-[assembly: Xamarin.Forms.Dependency(typeof(WearCompanion.Droid.ProviderService))]
 namespace WearCompanion.Droid
 {
     [Service(Exported = true, Name = "WearCompanion.Droid.ProviderService")]
-    public class ProviderService : SAAgent 
+    public class ProviderService : SAAgent
     {
         public Action<string> _onComplete;
         public static readonly string TAG = typeof(ProviderService).Name;
         public static readonly Java.Lang.Class SASOCKET_CLASS = Java.Lang.Class.FromType(typeof(ProviderServiceSocket)).Class;
         public IBinder mBinder { get; private set; }
         public ProviderServiceSocket mSocketServiceProvider = null;
-        Handler mHandler = new Handler();
+        private readonly Handler mHandler = new Handler();
         private Context _context;
         private bool _isRunning;
-        private Task _task;
+        private readonly Task _task;
         private static readonly int CHANNEL_ID = 104;
-
- 
+        [Export(SuperArgumentsString = "\"ProviderService\", ProviderService_ProviderServiceSocket.class")]
         public ProviderService() : base("ProviderService", SASOCKET_CLASS)
         {
 
         }
- 
+
         public override void OnDestroy()
         {
             base.OnDestroy();
@@ -51,8 +50,8 @@ namespace WearCompanion.Droid
         {
             // This method must always be implemented
             Android.Util.Log.Debug(TAG, "OnBind");
-            this.mBinder = new AgentBinder(this);
-            return this.mBinder;
+            mBinder = new AgentBinder(this);
+            return mBinder;
         }
 
         public override bool OnUnbind(Intent intent)
@@ -64,11 +63,12 @@ namespace WearCompanion.Droid
 
         [return: GeneratedEnum]
         public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
-        {      
+        {
             FindPeerAgents();
 
             return base.OnStartCommand(intent, flags, startId);
         }
+
 
         public override void OnCreate()
         {
@@ -77,18 +77,35 @@ namespace WearCompanion.Droid
             if ((Build.VERSION.SdkInt >= BuildVersionCodes.O))
             {
                 NotificationManager notificationManager = null;
-                String channel_id = "sample_channel_01";
+                string channel_id = "sample_channel_01";
                 if ((notificationManager == null))
                 {
-                    String channel_name = "Accessory_SDK_Sample";
+                    string channel_name = "Accessory_SDK_Sample";
                     notificationManager = ((NotificationManager)(GetSystemService(Context.NotificationService)));
-                    NotificationChannel notiChannel = new NotificationChannel(channel_id, channel_name, NotificationManager.ImportanceLow);
+                    var notiChannel = new NotificationChannel(channel_id, channel_name, NotificationManager.ImportanceLow);
                     notificationManager.CreateNotificationChannel(notiChannel);
+
+                    if (notificationManager.GetNotificationChannel(channel_id) == null)
+                    {
+                        var channel = new NotificationChannel(
+                            channel_id,
+                           new Java.Lang.String("Channel"),
+                            NotificationImportance.Max
+                        );
+                        string d = "";
+                        if (!string.IsNullOrWhiteSpace(d))
+                        {
+                            channel.Description = d;
+                        }
+
+                        notificationManager.CreateNotificationChannel(channel);
+                    }
                 }
 
                 int notifyID = 1;
 
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(Application.Context)
+                .SetChannelId(channel_id)
                 .SetAutoCancel(true)
                 .SetContentTitle(TAG)
                 .SetContentText("connected to your watch")
@@ -101,13 +118,13 @@ namespace WearCompanion.Droid
 
             _context = this;
             _isRunning = false;
-         
+
             var mAccessory = new SA();
             try
             {
                 mAccessory.Initialize(this);
             }
-            catch (SsdkUnsupportedException e)
+            catch (SsdkUnsupportedException)
             {
                 // try to handle SsdkUnsupportedException
             }
@@ -123,9 +140,9 @@ namespace WearCompanion.Droid
                 StopSelf();
             }
 
-            var isFeatureEnabled = mAccessory.IsFeatureEnabled(SA.DeviceAccessory);
+            bool isFeatureEnabled = mAccessory.IsFeatureEnabled(SA.DeviceAccessory);
 
-          
+
 
         }
 
@@ -139,7 +156,7 @@ namespace WearCompanion.Droid
         //    }
         //    catch (Exception e)
         //    {
-              
+
         //    }
         //    finally
         //    {
@@ -148,8 +165,8 @@ namespace WearCompanion.Droid
         //}
 
 
-        public string Message { get; set; }
-       
+        public string Message { get; set; } = "hello";
+
         protected override void OnFindPeerAgentsResponse(SAPeerAgent[] p0, int result)
         {
 #if DEBUG
@@ -157,7 +174,7 @@ namespace WearCompanion.Droid
 #endif
             if (result == PeerAgentFound)
             {
-                foreach (var peerAgent in p0)
+                foreach (SAPeerAgent peerAgent in p0)
                 {
                     //  Cache(peerAgent);
                     RequestServiceConnection(peerAgent);
@@ -168,7 +185,9 @@ namespace WearCompanion.Droid
         protected override void OnServiceConnectionRequested(SAPeerAgent p0)
         {
             if (p0 != null)
+            {
                 AcceptServiceConnectionRequest(p0);
+            }
         }
 
         protected override void OnServiceConnectionResponse(SAPeerAgent p0, SASocket socket, int result)
@@ -247,16 +266,14 @@ namespace WearCompanion.Droid
 
         public class AgentBinder : Binder
         {
-            public AgentBinder(ProviderService service)
-            {
-                this.Service = service;
-            }
+            public AgentBinder(ProviderService service) => Service = service;
 
             public ProviderService Service { get; private set; }
         }
+
         public class ProviderServiceSocket : SASocket
         {
-
+            [Export(SuperArgumentsString = "\"ProviderServiceSocket\"")]
             public ProviderServiceSocket() : base(p0: "ProviderServiceSocket")
             {
 
@@ -273,11 +290,9 @@ namespace WearCompanion.Droid
 #endif
             }
 
-            protected override void OnServiceConnectionLost(int p0)
-            {
+            protected override void OnServiceConnectionLost(int p0) =>
                 // ResetCache();
                 Close();
-            }
 
             public override void OnError(int p0, string p1, int p2)
             {
