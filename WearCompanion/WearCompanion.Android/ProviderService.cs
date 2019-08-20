@@ -101,7 +101,7 @@ namespace WearCompanion.Droid
                         notificationManager.CreateNotificationChannel(channel);
                     }
                 }
-
+                 
                 int notifyID = 1;
 
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(Application.Context)
