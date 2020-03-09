@@ -7,12 +7,18 @@
              x:Class="WearCompanion.MainPage">
 
     <StackLayout>
-        <!-- Place new controls here -->
+        <StackLayout
+            Padding="20,20,20,20"
+            Orientation="Horizontal" >
+            <Switch x:Name="serviceSwitch"/>
+            <Label x:Name="switchText" FontSize="Micro" Text="Enable sync service"/>
+        </StackLayout>
+        
         <Entry WidthRequest="300" HeightRequest="100" x:Name="entry" />
-        <Button Text="Close Conn" WidthRequest="200" HeightRequest="50" Clicked="Connect_Clicked" />
-        <Button Text="Send" WidthRequest="200" HeightRequest="50" Clicked="Send_Clicked" />
-
-        <Label x:Name="lblStatus" FontSize="Micro" TextColor="Red"/>
+        <Button Text="Send" 
+                WidthRequest="200" 
+                HeightRequest="50" 
+                Clicked="Send_Clicked" />
     </StackLayout>
 
 </ContentPage>

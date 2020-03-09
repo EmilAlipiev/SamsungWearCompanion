@@ -1,4 +1,5 @@
-﻿<resources>
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
   <application name="WearCompanion">
     <serviceProfile
 				id="/sample/hello"
@@ -10,13 +11,11 @@
 				serviceTimeout="10">
       <supportedTransports>
         <transport type="TRANSPORT_BT" />
-        <transport type="TRANSPORT_WIFI" />
       </supportedTransports>
-      <serviceChannel
-					id="104"
-					dataRate="low"
-					priority="high"
-					reliability= "enable"/>
+      <serviceChannel id="104" dataRate="low" priority="low" reliability="enable"/>
+      <supportedFeatures>
+        <feature type="message" />
+      </supportedFeatures>
     </serviceProfile>
   </application>
 </resources>
