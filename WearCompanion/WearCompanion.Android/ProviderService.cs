@@ -14,110 +14,59 @@ using Com.Samsung.Accessory;
 using Com.Samsung.Android.Sdk;
 using Com.Samsung.Android.Sdk.Accessory;
 using Java.Interop;
+using static Android.OS.PowerManager;
 
 namespace WearCompanion.Droid
 {
     [Service(Exported = true, Name = "WearCompanion.Droid.ProviderService")]
     public class ProviderService : SAAgent
     {
-        public Action<string> _onComplete;
+        /// <summary>
+        ///     The service running notification identifier
+        /// </summary>
+        private const int NotificationId = 999999;
+
+        /// <summary>
+        ///     Determine if the service is started
+        /// </summary>
+        private bool _isServiceStarted;
+
+        /// <summary>
+        ///     Determine if the service is started as a foreground service
+        /// </summary>
+        private bool _isServiceStartedInForeground;
+
+        private readonly string _uniqueChannelId = "ff20e147-fcd3-43bb-9116-0b89f6f07704";
+        private readonly string _channelName = "ServiceCoachServiceChannel";
+        private const NotificationImportance Importance = NotificationImportance.Low;
+
+
         public static readonly string TAG = typeof(ProviderService).Name;
         public static readonly Java.Lang.Class SASOCKET_CLASS = Java.Lang.Class.FromType(typeof(ProviderServiceSocket)).Class;
-        public IBinder mBinder { get; private set; }
-        public ProviderServiceSocket mSocketServiceProvider = null;
-        private readonly Handler mHandler = new Handler();
-        private Context _context;
-        private bool _isRunning;
+        public static readonly int CHANNEL_ID = 104;
+
+        //private readonly string _wakeLockTag = "nl.ns.servicecoach.FOREGROUNDSERVER";
+        //private PowerManager _powerManager;
+        //private WakeLock _wakeLock;
+
         private readonly Task _task;
-        private static readonly int CHANNEL_ID = 104;
+
+        public Action<string> _onComplete;
+        public ProviderServiceSocket _mSocketServiceProvider = null;
+
+        public IBinder mBinder { get; private set; }
+
         [Export(SuperArgumentsString = "\"ProviderService\", ProviderService_ProviderServiceSocket.class")]
         public ProviderService() : base("ProviderService", SASOCKET_CLASS)
         {
 
         }
 
-        public override void OnDestroy()
-        {
-            base.OnDestroy();
-            _isRunning = false;
-
-            if (_task != null && _task.Status == TaskStatus.RanToCompletion)
-            {
-                _task.Dispose();
-            }
-        }
-        public override IBinder OnBind(Intent intent)
-        {
-            // This method must always be implemented
-            Android.Util.Log.Debug(TAG, "OnBind");
-            mBinder = new AgentBinder(this);
-            return mBinder;
-        }
-
-        public override bool OnUnbind(Intent intent)
-        {
-            // This method is optional to implement
-            Android.Util.Log.Debug(TAG, "OnUnbind");
-            return base.OnUnbind(intent);
-        }
-
-        [return: GeneratedEnum]
-        public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
-        {
-            FindPeerAgents();
-
-            return base.OnStartCommand(intent, flags, startId);
-        }
-
-
         public override void OnCreate()
         {
+            Android.Util.Log.Debug(TAG, "ProviderService.OnCreate");
+
             base.OnCreate();
-
-            if ((Build.VERSION.SdkInt >= BuildVersionCodes.O))
-            {
-                NotificationManager notificationManager = null;
-                string channel_id = "sample_channel_01";
-                if ((notificationManager == null))
-                {
-                    string channel_name = "Accessory_SDK_Sample";
-                    notificationManager = ((NotificationManager)(GetSystemService(Context.NotificationService)));
-                    var notiChannel = new NotificationChannel(channel_id, channel_name, NotificationManager.ImportanceLow);
-                    notificationManager.CreateNotificationChannel(notiChannel);
-
-                    if (notificationManager.GetNotificationChannel(channel_id) == null)
-                    {
-                        var channel = new NotificationChannel(
-                            channel_id,
-                           new Java.Lang.String("Channel"),
-                            NotificationImportance.Max
-                        );
-                        string d = "";
-                        if (!string.IsNullOrWhiteSpace(d))
-                        {
-                            channel.Description = d;
-                        }
-
-                        notificationManager.CreateNotificationChannel(channel);
-                    }
-                }
-                 
-                int notifyID = 1;
-
-                NotificationCompat.Builder builder = new NotificationCompat.Builder(Application.Context)
-                .SetChannelId(channel_id)
-                .SetAutoCancel(true)
-                .SetContentTitle(TAG)
-                .SetContentText("connected to your watch")
-                .SetPriority(1)
-                .SetVisibility(1)
-                .SetCategory(Android.App.Notification.CategoryEvent);
-                StartForeground(notifyID, builder.Build());
-            }
-
-
-            _context = this;
-            _isRunning = false;
 
             var mAccessory = new SA();
             try
@@ -128,9 +77,9 @@ namespace WearCompanion.Droid
             {
                 // try to handle SsdkUnsupportedException
             }
-            catch (Exception e1)
+            catch (Exception ex)
             {
-                e1.ToString();
+                ex.ToString();
 
                 /*
                 * Your application can not use Samsung Accessory SDK. Your application should work smoothly
@@ -140,43 +89,147 @@ namespace WearCompanion.Droid
                 StopSelf();
             }
 
-            bool isFeatureEnabled = mAccessory.IsFeatureEnabled(SA.DeviceAccessory);
+            _isServiceStarted = true;
 
-
-
+            //_powerManager = (PowerManager)GetSystemService(PowerService);
+            //_wakeLock = _powerManager.NewWakeLock(WakeLockFlags.Partial, _wakeLockTag);
         }
 
-        //private void DoWork(string msg)
-        //{
-        //    try
-        //    {
-        //        FindPeers(msg);
+        [return: GeneratedEnum]
+        public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
+        {
+            Task.Run(() => HandleCommandAsync(intent));
 
+            return base.OnStartCommand(intent, flags, startId);
+        }
 
-        //    }
-        //    catch (Exception e)
-        //    {
+        private void HandleCommandAsync(Intent intent)
+        {
+            if (intent != null)
+            {
+                // Handle Actions
+                HandleIntentAction(intent);
 
-        //    }
-        //    finally
-        //    {
-        //        StopSelf();
-        //    }
-        //}
+                // Handle Extra's
+                HandleIntentExtra(intent);
+            }
+            else
+            {
+                if (!_isServiceStartedInForeground)
+                {
+                    Android.Util.Log.Debug(TAG, "Starting service without intent: " + nameof(ProviderService));
+                    RegisterForegroundService();
+                }
+            }
 
+            if (_isServiceStartedInForeground)
+            {
+                Android.Util.Log.Debug(TAG, "Refresh notification for: " + nameof(ProviderService));
+                RefreshNotification();
+            }
+        }
 
-        public string Message { get; set; } = "hello";
+        private void HandleIntentExtra(Intent intent)
+        {
+            if (intent.Extras == null)
+            {
+                return;
+            }
+
+            if (intent.HasExtra(ProviderServiceIntents.SendData))
+            {
+                Android.Util.Log.Debug(TAG, "Received command: ActiviteitDelen");
+                Android.Util.Log.Debug(TAG, "Sending activiteit to wearable");
+
+                var bericht = intent.GetStringExtra(ProviderServiceIntents.SendData);
+                SendDataToWearableAsync(CHANNEL_ID, bericht);
+            }
+        }
+
+        private void HandleIntentAction(Intent intent)
+        {
+            if (intent.Action == null)
+            {
+                return;
+            }
+
+            if (intent.Action.Equals(ProviderServiceIntents.Action_StartService))
+            {
+                // ensure CPU is not sleeping
+                //_wakeLock?.Acquire();
+
+                Android.Util.Log.Debug(TAG, "Received command: StartService");
+
+                if (!_isServiceStartedInForeground)
+                {
+                    Android.Util.Log.Debug(TAG, "Starting service: " + nameof(ProviderService));
+                    RegisterForegroundService();
+                }
+            }
+            else if (intent.Action.Equals(ProviderServiceIntents.Action_StopService))
+            {
+                //if (_wakeLock != null && _wakeLock.IsHeld)
+                //{
+                //    _wakeLock.Release();
+                //}
+
+                Android.Util.Log.Debug(TAG, "Received command: StopService");
+
+                if (_isServiceStartedInForeground)
+                {
+                    Android.Util.Log.Debug(TAG, "Stopping service: " + nameof(ProviderService));
+                    UnregisterForegroundService();
+                }
+            }
+        }
+
+        private void SendDataToWearableAsync(int channel, string message)
+        {
+            if (_mSocketServiceProvider != null
+                && _mSocketServiceProvider.IsConnected)
+            {
+                _mSocketServiceProvider.Send(channel, System.Text.Encoding.ASCII.GetBytes(message));
+            }
+            else
+            {
+                Android.Util.Log.Debug(TAG, "Failed to connect to GoogleApiClient");
+            }
+        }
+
+        /// <summary>
+        ///     Called when [bind].
+        /// </summary>
+        public override IBinder OnBind(Intent intent)
+        {
+            // Return null because this is not needed for a started service.
+            return null;
+        }
+
+        public override void OnDestroy()
+        {
+            Android.Util.Log.Debug(TAG, "The service is shutting down");
+            _isServiceStarted = false;
+
+            // Remove the notification from the status bar.
+            var notificationManager = GetSystemService(NotificationService) as NotificationManager;
+            notificationManager?.Cancel(NotificationId);
+
+            base.OnDestroy();
+
+            if (_task != null && _task.Status == TaskStatus.RanToCompletion)
+            {
+                _task.Dispose();
+            }
+        }
 
         protected override void OnFindPeerAgentsResponse(SAPeerAgent[] p0, int result)
         {
-#if DEBUG
-            Console.WriteLine(TAG, "onFindPeerAgentResponse : result =" + result);
-#endif
+            Android.Util.Log.Debug(TAG, "onFindPeerAgentResponse : result =" + result);
+
             if (result == PeerAgentFound)
             {
                 foreach (SAPeerAgent peerAgent in p0)
                 {
-                    //  Cache(peerAgent);
                     RequestServiceConnection(peerAgent);
                 }
             }
@@ -192,69 +245,27 @@ namespace WearCompanion.Droid
 
         protected override void OnServiceConnectionResponse(SAPeerAgent p0, SASocket socket, int result)
         {
-            // Cache(socket);
             if ((result == SAAgent.ConnectionSuccess))
             {
                 if ((socket != null))
                 {
-                    mSocketServiceProvider = ((ProviderServiceSocket)(socket));
-                    mSocketServiceProvider.Send(CHANNEL_ID, System.Text.Encoding.ASCII.GetBytes(Message));
+                    _mSocketServiceProvider = ((ProviderServiceSocket)(socket));
+                    _mSocketServiceProvider.Send(CHANNEL_ID, System.Text.Encoding.ASCII.GetBytes("Connected"));
                 }
 
             }
             else if ((result == SAAgent.ConnectionAlreadyExist))
             {
-#if DEBUG
-                Console.WriteLine("onServiceConnectionResponse, CONNECTION_ALREADY_EXIST");
-#endif
-
+                Android.Util.Log.Debug(TAG, "onServiceConnectionResponse, CONNECTION_ALREADY_EXIST");
             }
-
-        }
-
-        private bool processUnsupportedException(SsdkUnsupportedException e)
-        {
-#if DEBUG
-            Console.WriteLine(e.ToString());
-#endif
-
-            if (e.Equals(SsdkUnsupportedException.VendorNotSupported)
-                        || e.Equals(SsdkUnsupportedException.DeviceNotSupported))
-            {
-                StopSelf();
-            }
-            else if (e.Equals(SsdkUnsupportedException.LibraryNotInstalled))
-            {
-#if DEBUG
-                Console.WriteLine(TAG + "You need to install Samsung Accessory SDK to use this application.");
-#endif
-
-            }
-            else if (e.Equals(SsdkUnsupportedException.LibraryUpdateIsRequired))
-            {
-#if DEBUG
-                Console.WriteLine(TAG + "You need to update Samsung Accessory SDK to use this application.");
-
-#endif
-            }
-            else if (e.Equals(SsdkUnsupportedException.LibraryUpdateIsRecommended))
-            {
-#if DEBUG
-                Console.WriteLine(TAG + TAG, "We recommend that you update your Samsung Accessory SDK before using this application.");
-
-#endif
-                return false;
-            }
-
-            return true;
         }
 
         public bool CloseConnection()
         {
-            if ((mSocketServiceProvider != null))
+            if ((_mSocketServiceProvider != null))
             {
-                mSocketServiceProvider.Close();
-                mSocketServiceProvider = null;
+                _mSocketServiceProvider.Close();
+                _mSocketServiceProvider = null;
                 return true;
             }
             else
@@ -264,11 +275,54 @@ namespace WearCompanion.Droid
 
         }
 
-        public class AgentBinder : Binder
+        private void RefreshNotification()
         {
-            public AgentBinder(ProviderService service) => Service = service;
+            var notification = CreateNotification(Resources.GetString(Resource.String.NotificationTitle),
+                                                  Resources.GetString(Resource.String.NotificationDesciption));
 
-            public ProviderService Service { get; private set; }
+            NotificationManagerCompat.From(ApplicationContext).Notify(NotificationId, notification);
+        }
+
+        private Notification CreateNotification(string title, string contentText)
+        {
+            var serviceCoachActivityIntent = new Intent(this, typeof(MainActivity));
+            var pendingIntent = PendingIntent.GetActivity(this, 0, serviceCoachActivityIntent, PendingIntentFlags.UpdateCurrent);
+
+            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+            {
+                var notificationChannel = new NotificationChannel(_uniqueChannelId, _channelName, Importance);
+                notificationChannel.SetShowBadge(false);
+
+                var notificationManager = GetSystemService(NotificationService) as NotificationManager;
+                notificationManager?.CreateNotificationChannel(notificationChannel);
+            }
+
+            return new NotificationCompat.Builder(this, _uniqueChannelId)
+                .SetContentTitle(title)
+                .SetContentText(contentText)
+                .SetContentIntent(pendingIntent)
+                .SetOngoing(true)
+                .Build();
+        }
+
+        private void RegisterForegroundService()
+        {
+            Android.Util.Log.Debug(TAG, "Register foreground service");
+
+            var notification = CreateNotification(Resources.GetString(Resource.String.NotificationTitle),
+                                                  Resources.GetString(Resource.String.NotificationDesciption));
+
+            StartForeground(NotificationId, notification);
+            _isServiceStartedInForeground = true;
+        }
+
+        private void UnregisterForegroundService()
+        {
+            Android.Util.Log.Debug(TAG, "UnregisterForegroundService " + nameof(ProviderService));
+
+            StopForeground(true);
+            StopSelf();
+            _isServiceStartedInForeground = false;
         }
 
         public class ProviderServiceSocket : SASocket
@@ -279,28 +333,25 @@ namespace WearCompanion.Droid
 
             }
 
-
             public override void OnReceive(int channelId, byte[] bytes)
             {
                 // Check received data 
                 string message = System.Text.Encoding.UTF8.GetString(bytes);
-#if DEBUG
-                Console.WriteLine("Received: ", message);
 
-#endif
+                Android.Util.Log.Debug(TAG, "ProviderServiceSocket Received:" + message);
             }
 
-            protected override void OnServiceConnectionLost(int p0) =>
+            protected override void OnServiceConnectionLost(int p0)
+            {
                 // ResetCache();
+                Android.Util.Log.Debug(TAG, "ProviderServiceSocket OnServiceConnectionLost:" + p0);
                 Close();
+            }
 
             public override void OnError(int p0, string p1, int p2)
             {
-
                 // Error handling
             }
         }
-
     }
-
 }
